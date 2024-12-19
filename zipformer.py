@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from dataclasses import dataclass
 from typing import Optional
 from abc import ABC, abstractmethod
-from transformer import SelfAttentionHead, MultiheadSelfAttention, ModelConfig, FeedForward
+from transformer import SelfAttentionHead, MultiheadSelfAttention, ModelConfig, FeedForward, Block
 
 """Yeah, idk...."""
 
@@ -43,15 +43,15 @@ class NonLinearAttention(nn.Module):
         return out
 
 
-class ZipformerBlock(nn.Module):
+class ZipformerBlock(Block):
     """ Zipformer Block
         Returns: output for Zipformer"""
-    
     def __init__(self, config: ModelConfig):
         """
         Args:
             config (ModelConfig): the hyperparameters of the model
         """   
+        super().__init__()
         # Get config
         self.config = config
 

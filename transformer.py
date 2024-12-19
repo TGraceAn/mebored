@@ -39,22 +39,17 @@ class SelfAttentionHead(nn.Module):
             config (ModelConfig): the hyperparameters of the model
             head_size (int): how big a head is
         """            
-
         super().__init__()
-
-        # Get config
-        self.config = config
-
-        # Linear layer for key, query, value
-        self.key = nn.Linear(self.config.n_embd, head_size, bias = False) # map from n_embd -> hs
-        self.query = nn.Linear(self.config.n_embd, head_size, bias = False)
-        self.value = nn.Linear(self.config.n_embd, head_size, bias = False)
+        # Linear layers for key, query, value
+        self.key = nn.Linear(config.n_embd, head_size, bias = False) # map from n_embd -> hs
+        self.query = nn.Linear(config.n_embd, head_size, bias = False)
+        self.value = nn.Linear(config.n_embd, head_size, bias = False)
 
         # Attention mask (Optional)
-        self.register_buffer('mask', torch.tril(torch.ones(self.config.block_size, self.config.block_size)))        
+        self.register_buffer('mask', torch.tril(torch.ones(config.block_size, config.block_size)))        
         
         # # Optional for regularization default = 0
-        # self.dropout = nn.Dropout(self.config.dropout)
+        # self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x, mask: bool = False):
         """
@@ -98,18 +93,15 @@ class MultiheadSelfAttention(nn.Module):
             config (ModelConfig): the hyperparameters of the model
         """
         super().__init__()
-        #Get model config
-        self.config = config
-
-        self.hs = self.config.n_embd // self.config.n_head
-        self.heads = nn.ModuleList([SelfAttentionHead(self.config, self.hs) for _ in range(self.config.n_head)]) #get the number of heads to be calculated in parallel
+        hs = config.n_embd // config.n_head
+        self.heads = nn.ModuleList([SelfAttentionHead(config, hs) for _ in range(config.n_head)]) #get the number of heads to be calculated in parallel
 
         # Last linear layer
         # Normally hs*heads = n_embed
-        self.proj = nn.Linear(self.hs*self.config.n_head, self.config.n_embd)
+        self.proj = nn.Linear(hs*config.n_head, config.n_embd)
 
         # # Optional for regularization default = 0
-        # self.dropout = nn.Dropout(self.config.dropout)
+        # self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x, mask: bool = False):
         """
@@ -147,20 +139,16 @@ class CrossAttentionHead(nn.Module):
         """            
 
         super().__init__()
-
-        # Get config
-        self.config = config
-
-        # Linear layer for key, query, value
-        self.key = nn.Linear(self.config.n_embd, head_size, bias = False) # map from n_embd -> hs
-        self.query = nn.Linear(self.config.n_embd, head_size, bias = False)
-        self.value = nn.Linear(self.config.n_embd, head_size, bias = False)
+        # Linear layers for key, query, value
+        self.key = nn.Linear(config.n_embd, head_size, bias = False) # map from n_embd -> hs
+        self.query = nn.Linear(config.n_embd, head_size, bias = False)
+        self.value = nn.Linear(config.n_embd, head_size, bias = False)
 
         # Attention mask (Optional)
-        self.register_buffer('mask', torch.tril(torch.ones(self.config.block_size, self.config.block_size)))        
+        self.register_buffer('mask', torch.tril(torch.ones(config.block_size, config.block_size)))        
         
         # # Optional for regularization default = 0
-        # self.dropout = nn.Dropout(self.config.dropout)
+        # self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x, encode_out, mask: bool = False):
         B, T, C = x.shape # B: batch_size, T: sequence_length, C: channels (n_embd)
@@ -203,18 +191,15 @@ class MultiheadCrossAttention(nn.Module):
             config (ModelConfig): the hyperparameters of the model
         """
         super().__init__()
-        #Get model config
-        self.config = config
-
-        self.hs = self.config.n_embd // self.config.n_head
-        self.heads = nn.ModuleList([CrossAttentionHead(self.config, self.hs) for _ in range(self.config.n_head)]) #get the number of heads to be calculated in parallel
+        hs = config.n_embd // config.n_head
+        self.heads = nn.ModuleList([CrossAttentionHead(config, hs) for _ in range(config.n_head)]) #get the number of heads to be calculated in parallel
 
         # Last linear layer
         # Normally hs*heads = n_embed
-        self.proj = nn.Linear(self.hs*self.config.n_head, self.config.n_embd)
+        self.proj = nn.Linear(hs*config.n_head, config.n_embd)
 
         # # Optional for regularization default = 0
-        # self.dropout = nn.Dropout(self.config.dropout)
+        # self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x, encode_out, mask: bool = False):
         """
@@ -252,16 +237,12 @@ class FeedForward(nn.Module):
             config (ModelConfig): the hyperparameters of the model
         """
         super().__init__()
-
-        # Get the config
-        self.config = config
-
         # Network for the Feedforward layer
         self.net = nn.Sequencial(
-            nn.Linear(self.config.n_embd, 4 * self.config.n_embd), #Expand the hidden size
+            nn.Linear(config.n_embd, 4 * config.n_embd), #Expand the hidden size
             nn.ReLU(),
-            nn.Linear(4*self.config.n_embd, self.config.n_embd)
-            # , nn.Dropout(self.config.dropout) 
+            nn.Linear(4*config.n_embd, config.n_embd)
+            # , nn.Dropout(config.dropout) 
         )
     
     def forward(self, x):
@@ -296,12 +277,10 @@ class EncoderBlock(Block):
             config (ModelConfig): the hyperparameters of the model
         """
         super().__init__()
-
-        self.config = config
-        self.attention = MultiheadSelfAttention(self.config)
-        self.ln_1 = nn.LayerNorm(self.config.n_embd)
-        self.ln_2 = nn.LayerNorm(self.config.n_embd)
-        self.ffw = FeedForward(self.config)
+        self.attention = MultiheadSelfAttention(config)
+        self.ln_1 = nn.LayerNorm(config.n_embd)
+        self.ln_2 = nn.LayerNorm(config.n_embd)
+        self.ffw = FeedForward(config)
 
     def forward(self, x):
         """
@@ -330,17 +309,12 @@ class DecoderBlock(nn.Module):
             config (ModelConfig): the hyperparameters of the model
         """
         super().__init__()
-        
-        # Get the config
-        self.config = config
-        
-        # Blocks in this block
-        self.self_attention = MultiheadSelfAttention(self.config) #remember to set mask=True in forward
-        self.cross_attention = MultiheadCrossAttention(self.config)
-        self.ffw = FeedForward(self.config)
-        self.ln_1 = nn.LayerNorm(self.config.n_embd)
-        self.ln_2 = nn.LayerNorm(self.config.n_embd)
-        self.ln_3 = nn.LayerNorm(self.config.n_embd)
+        self.self_attention = MultiheadSelfAttention(config) #remember to set mask=True in forward
+        self.cross_attention = MultiheadCrossAttention(config)
+        self.ffw = FeedForward(config)
+        self.ln_1 = nn.LayerNorm(config.n_embd)
+        self.ln_2 = nn.LayerNorm(config.n_embd)
+        self.ln_3 = nn.LayerNorm(config.n_embd)
 
     def forward(self, x, encode_out):
         """
@@ -373,12 +347,8 @@ class Encoder(nn.Module):
             config (ModelConfig): the hyperparameters of the model
         """
         super().__init__()
-
-        # Get the config
-        self.config = config
-
-        self.blocks = nn.ModuleList([EncoderBlock(self.config) for _ in range(self.config.n_layer)])
-        self.ln_f = nn.LayerNorm(self.config.n_embd) 
+        self.blocks = nn.ModuleList([EncoderBlock(config) for _ in range(config.n_layer)])
+        self.ln_f = nn.LayerNorm(config.n_embd) 
         
     def forward(self, x):
         """
@@ -403,12 +373,8 @@ class Decoder(nn.Module):
             config (ModelConfig): the hyperparameters of the model
         """
         super().__init__()
-
-        # Get the config
-        self.config = config
-
-        self.blocks = nn.ModuleList([DecoderBlock(self.config) for _ in range(self.config.n_layer)])
-        self.ln_f = nn.LayerNorm(self.config.n_embd) 
+        self.blocks = nn.ModuleList([DecoderBlock(config) for _ in range(config.n_layer)])
+        self.ln_f = nn.LayerNorm(config.n_embd) 
         
     def forward(self, x, encode_out):
         """
@@ -440,14 +406,14 @@ class VanillaTransfomer(nn.Module):
         self.config = config
 
         # Get the architecture
-        self.encoder = Encoder(self.config)
-        self.decoder = Decoder(self.config)
+        self.encoder = Encoder(config)
+        self.decoder = Decoder(config)
 
         # Embeddings: I'm still not sure if we're suppose to split it like this or use the same positional and token embedding for both
-        self.src_wte = nn.Embedding(self.config.vocab_size, self.config.n_embd) #Token embedding
-        self.src_wpe = nn.Embedding(self.config.block_size, self.config.n_embd) #Positional embedding
-        self.tgt_wte = nn.Embedding(self.config.vocab_size, self.config.n_embd) #Token embedding
-        self.tgt_wpe = nn.Embedding(self.config.block_size, self.config.n_embd) #Positional embedding
+        self.src_wte = nn.Embedding(config.vocab_size, config.n_embd) #Token embedding
+        self.src_wpe = nn.Embedding(config.block_size, config.n_embd) #Positional embedding
+        self.tgt_wte = nn.Embedding(config.vocab_size, config.n_embd) #Token embedding
+        self.tgt_wpe = nn.Embedding(config.block_size, config.n_embd) #Positional embedding
         
         # Output projection layer
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
