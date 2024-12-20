@@ -19,7 +19,7 @@ class ModelConfig:
         n_head (int): number of heads (how many heads will be working)
         n_embd (int): embedding size (how long the vector for a word) (= n_head * head_size)
         vocab_size (int): number of vocab in the tokenizer
-        ocab_size_2 (int): default 0, vocab of the target language (Use for machine translation tasks)
+        vocab_size_2 (int): default 0, vocab of the target language (Use for machine translation tasks)
         dropout (Optional[int]): default 0, percentage of dropouts
     """
     block_size: int
