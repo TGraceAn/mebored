@@ -7,14 +7,11 @@ from abc import ABC, abstractmethod
 from transformer import SelfAttentionHead, MultiheadSelfAttention, ModelConfig, FeedForward, Block
 
 """Yeah this from Google's Music Transformer...
-But just the attention head and multihead attention block for now
-Since I don't really remember the whole paper"""
+Since I don't really remember the whole paper...
+I'm just trying the relative attention with skew method for now"""
 
-class RelativeAttentionHead(nn.Module):
-    """
-    One head of Self-Attention with relative positional encoding
-    Returns: output for one relative attention head
-    """
+class MusicTransformer_AttentionHead(nn.Module):
+    """..."""
 
     def __init__(self, config: ModelConfig, head_size: int):
         """
@@ -38,11 +35,33 @@ class RelativeAttentionHead(nn.Module):
         # # Optional for regularization default = 0
         # self.dropout = nn.Dropout(config.dropout)
 
-        self.E = nn.Embedding(config.block_size, head_size)
+        #TODO: Write the rest from here
 
-        #TODO: Write the rest here
+        #relative embedding
+        self.E = nn.Embedding(config.block_size, head_size) # use for relative positional encoding
 
-    #Check skew
+        #to here
+
+    def forward(self, x):
+        B, T, C = x.shape # B: batch_size, T: sequence_length, C: channels (n_embd)
+
+        k = self.key(x)     # B, T, hs
+        q = self.query(x)   # B, T, hs
+        v = self.value(x)   # B, T, hs
+
+
+        #TODO: Write the rest from here
+        S_rel = ...
+        # positional embedding
+        relative_position = ...
+
+
+        # q @ k transpose
+        wei_content = q @ k.transpose(-2, -1) # (B, T, hs) @ (B, hs, T) -> (B, T, T)
+
+        #to here
+
+    #TODO: Check skew algorithm
     def skew(self, x):
         B, T, T2 = x.size()
         assert T == T2, 'The input must be square from dim 1, and 2'
