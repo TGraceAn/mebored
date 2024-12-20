@@ -67,7 +67,7 @@ class SelfAttentionHead(nn.Module):
         v = self.value(x)   # B, T, hs
 
         # Calculate the attention weights
-        wei = q @ k.transpose(-2, -1) * k.shape(-1)**-0.5 #scaled dot product (B, T, hs) @ (B, hs, T) -> (B, T, T)
+        wei = q @ k.transpose(-2, -1) * k.shape[-1]**-0.5 #scaled dot product v
         
         if mask:
             # Mask (Optional)
@@ -165,7 +165,7 @@ class CrossAttentionHead(nn.Module):
         v = self.value(encode_out)      # B, T, hs
 
         # Calculate the attention weights
-        wei = q @ k.transpose(-2, -1) * k.shape(-1)**-0.5 #scaled dot product (B, T, hs) @ (B, hs, T) -> (B, T, T)
+        wei = q @ k.transpose(-2, -1) * k.shape[-1]**-0.5 #scaled dot product (B, T, hs) @ (B, hs, T) -> (B, T, T)
         
         if mask:
             # Mask (Optional)
