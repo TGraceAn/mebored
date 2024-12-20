@@ -19,6 +19,7 @@ class ModelConfig:
         n_head (int): number of heads (how many heads will be working)
         n_embd (int): embedding size (how long the vector for a word) (= n_head * head_size)
         vocab_size (int): number of vocab in the tokenizer
+        ocab_size_2 (int): default 0, vocab of the target language (Use for machine translation tasks)
         dropout (Optional[int]): default 0, percentage of dropouts
     """
     block_size: int
@@ -26,7 +27,8 @@ class ModelConfig:
     n_head: int
     n_embd: int
     vocab_size: int
-    dropout: Optional[int] = 0
+    vocab_size_2: int = 0
+    dropout: int = 0
 
 
 class SelfAttentionHead(nn.Module):
@@ -409,12 +411,13 @@ class VanillaTransfomer(nn.Module):
         self.encoder = Encoder(config)
         self.decoder = Decoder(config)
 
-        # Embeddings: I'm still not sure if we're suppose to split it like this or use the same positional and token embedding for both
-        self.src_wte = nn.Embedding(config.vocab_size, config.n_embd) #Token embedding
-        self.src_wpe = nn.Embedding(config.block_size, config.n_embd) #Positional embedding
-        self.tgt_wte = nn.Embedding(config.vocab_size, config.n_embd) #Token embedding
-        self.tgt_wpe = nn.Embedding(config.block_size, config.n_embd) #Positional embedding
+        # Embeddings: Tokens, use different for different languages
+        self.wte = nn.Embedding(config.vocab_size, config.n_embd) #Token embedding
+        self.owte = nn.Embedding(config.vocab_size_2, config.n_embd) #Token embedding for the 2nd language
         
+        # Positional: Same position
+        self.wpe = nn.Embedding(config.block_size, config.n_embd) #Positional embedding
+
         # Output projection layer
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
@@ -436,35 +439,47 @@ class VanillaTransfomer(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std = 0.02)
 
-    def forward(self, src, tgt):
+    def forward(self, idx, odx, tgt: Optional[torch.Tensor]=None):
         """
         Args:
-            src (torch.Tensor): Source sequence of shape (B, T_src)
-            tgt (torch.Tensor): Target sequence of shape (B, T_tgt)
+            idx (torch.Tensor): Source sequence of shape (B_idx, T_idx)
+            odx (torch.Tensor): Output sequence (For example in another language) (B_odx, T_odx) #Initially maybe a [START_TRANSLATE_TOKEN]
+            tgt (Optional[torch.Tensor]) (default=None): Target sequence of shape (B, T_tgt)
+
         Returns:
             logits (torch.Tensor): Output logits of shape (B, T_tgt, vocab_size)
         """
-        B_1, T_src = src.shape
-        B_2, T_tgt = tgt.shape
+        B_idx, T_idx = idx.shape
+        B_odx, T_odx = odx.shape
 
-        assert B_1 == B_2, 'make sure that the input and output have the same batch size'
-
-        # Positional vectors
-        src_pos = torch.arange(0, T_src, dtype = torch.long, device = src.device)
-        tgt_pos = torch.arange(0, T_tgt, dtype = torch.long, device = tgt.device)
+        assert B_idx == B_odx, 'make sure that the input and output have the same batch size' # Now mark as B
 
         # Token embedding
-        src_tok = self.src_wte(src)
-        tgt_tok = self.tgt_wte(tgt)
+        idx_tok = self.wte(idx) # (B, T_idx, n_embd)
+        odx_tok = self.wte(odx) # (B, T_odx, n_embd)
 
-        # Inputs for the encode and decode
-        src_x = src_pos + src_tok
-        tgt_x = tgt_pos + tgt_tok
+        # Positional embedding
+        idx_pos = self.wpe(torch.arange(0, T_idx, dtype = torch.long, device = idx.device)) # (1, T_idx) -> (T_idx, C: num_embedding)
+        odx_pos = self.wpe(torch.arange(0, T_odx, dtype = torch.long, device = odx.device)) # (1, T_odx) -> (T_odx, C: num_embedding)
+        
+        x_in = idx_tok + idx_pos
+        x_out = odx_tok + odx_pos
 
-        encode_out = self.encoder(src_x)
-        decode_out = self.decoder(tgt_x, encode_out)
+        encode_out = self.encoder(x_in)
+        decode_out = self.decoder(x_out, encode_out)
 
         logits = self.lm_head(decode_out)
-        return logits
-    
+
+        if tgt == None:
+            loss = 0
+        else:
+            B, T, C = logits.shape
+            logits = logits.view(B*T, C)
+            tgt = tgt.view(B*T)
+            loss = F.cross_entropy(logits, tgt)
+
+        return logits, loss
+
+#Note: Softmax will be use on the softmax
+
 #TODO: fix the typing!!!!
