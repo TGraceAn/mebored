@@ -109,7 +109,7 @@ class MultiheadRelativeAttention(nn.Module):
 
         # self.dropout = nn.Dropout(config.dropout)
     
-    def forwar(self, x, mask):
+    def forward(self, x, mask):
         """
         Args:
             x: Input tensor
@@ -126,7 +126,7 @@ class MultiheadRelativeAttention(nn.Module):
 
         #Projection Layer
         out = self.proj(out)
-        
+
         return out
 
 #TODO: fix the typing!!!!
