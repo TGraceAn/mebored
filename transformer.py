@@ -121,7 +121,7 @@ class MultiheadSelfAttention(nn.Module):
             out = torch.cat([h(x) for h in self.heads], dim=-1) #(B, T, hs*n_heads)
 
         # Last linear layer
-        out = self.proj(x) # (B, T, C) (C here is n_embed)
+        out = self.proj(out) # (B, T, C) (C here is n_embed)
 
         # # Dropout
         # out = self.dropout(out)
@@ -221,7 +221,7 @@ class MultiheadCrossAttention(nn.Module):
             out = torch.cat([h(x, encode_out) for h in self.heads], dim=-1) #(B, T, hs*n_heads)
 
         # Last linear layer
-        out = self.proj(x) # (B, T, C) (C here is n_embed)
+        out = self.proj(out) # (B, T, C) (C here is n_embed)
 
         # # Dropout
         # out = self.dropout(out)
@@ -456,7 +456,7 @@ class VanillaTransfomer(nn.Module):
 
         # Token embedding
         idx_tok = self.wte(idx) # (B, T_idx, n_embd)
-        odx_tok = self.wte(odx) # (B, T_odx, n_embd)
+        odx_tok = self.owte(odx) # (B, T_odx, n_embd)
 
         # Positional embedding
         idx_pos = self.wpe(torch.arange(0, T_idx, dtype = torch.long, device = idx.device)) # (1, T_idx) -> (T_idx, C: num_embedding)
