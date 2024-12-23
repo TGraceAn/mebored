@@ -53,7 +53,7 @@ class RelativeAttentionHead(nn.Module):
         # Get the relative attention stuff
         R = self._get_rel_pos_embed(self.E) #relative position embedding
         # Q and R matrix multiplication operation
-        rel_att = q.unsqueeze(2) @ R.transpose(-2, -1) # q from (B, T, hs) -> (B, T, 1, hs) @ (T, hs, T) -> (B, T, 1, T) # Trust me, it works, it's not R with full transposed, I tested
+        rel_att = q.unsqueeze(2) @ R.transpose(-2, -1) # q from (B, T, hs) -> (B, T, 1, hs) @ (T, hs, T) -> (B, T, 1, T) # Trust me, it works, it's not R with full transposed or R half transpose and then transpose dim 0 and -2, I tested
         S_rel = rel_att.squeeze(2) # (B, T, T)
 
         # q @ k transpose
