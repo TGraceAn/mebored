@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from dataclasses import dataclass
-from typing import Optional
-from abc import ABC, abstractmethod
 from transformer import ModelConfig
 
 """This from the paper "Self-Attention with Relative Position Representations"
