@@ -152,5 +152,6 @@ class ZipformerBlock(Block):
         #After 11th block
         return out
         
+#TODO: Check the code logic for the nla, after that can continute with the bypass and biasnorm part
 
 
