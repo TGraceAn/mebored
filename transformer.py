@@ -9,6 +9,19 @@ from abc import ABC, abstractmethod
 This is me when I'm too bored
 """
 
+
+class LayerNorm_withBiasOption(nn.Module):
+    """LayerNorm with bias option"""
+
+    def __init__(self, ndim, bias):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(ndim))
+        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
+
+    def forward(self, input):
+        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
+
+
 @dataclass
 class ModelConfig:
     """
@@ -42,7 +55,7 @@ class SelfAttentionHead(nn.Module):
             head_size (int): how big a head is
         """            
         super().__init__()
-        # Linear layers for key, query, value
+        # Linear layers for key, query, value #bias = False so that the multiplication does have multiplication of fixed weight
         self.key = nn.Linear(config.n_embd, head_size, bias = False) # map from n_embd -> hs
         self.query = nn.Linear(config.n_embd, head_size, bias = False)
         self.value = nn.Linear(config.n_embd, head_size, bias = False)
