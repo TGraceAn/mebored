@@ -44,6 +44,77 @@ class ModelConfig:
     dropout: int = 0
 
 
+class AttentionBlockOnly(nn.Module):
+    def __init__(self, config: ModelConfig, head_size: int):
+        """
+        Args: 
+            config (ZipformerModelConfig): hyper params
+            head_size (int): head_size dim
+        """
+        super().__init__()
+
+        self.key = nn.Linear(config.n_embd, head_size, bias=False)
+        self.query = nn.Linear(config.n_embd, head_size, bias=False)
+
+        self.register_buffer('mask', torch.tril(torch.ones(config.block_size, config.block_size)))        
+
+        # # Optional for regularization default = 0
+        # self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, x, mask: bool = False):
+        """
+        Args:
+            x: Input tensor
+            mask (bool: default = False): Apply mask
+        Returns: output tensor
+        """
+        B, T, C = x.shape # B: batch_size, T: sequence_length, C: channels (n_embd)
+        
+        # Get keys, query, value
+        k = self.key(x)     # B, T, hs
+        q = self.query(x)   # B, T, hs
+        wei = q @ k.transpose(-2, -1) * k.shape[-1]**-0.5 # scale dot product 
+
+        if mask:
+            wei = wei.maskfill(self.mask[:T, :T] == 0, float('-inf')) # (B, T, T)
+
+        return F.softmax(wei) # (B, T, T) #attention weight
+    
+    
+#Different option, can use to optimize later
+class SAHead(nn.Module):
+    """ One head of Self-Attention:
+        Returns: output for one attention head"""
+
+    def __init__(self, config: ModelConfig, head_size: int):
+        """
+        Args:
+            config (ModelConfig): the hyperparameters of the model
+            head_size (int): how big a head is
+        """            
+        super().__init__()
+        # Linear layers for key, query, value #bias = False so that the multiplication does have multiplication of fixed weight
+        self.wei = AttentionBlockOnly(config, head_size)
+        self.value = nn.Linear(config.n_embd, head_size, bias = False)
+
+        # # Optional for regularization default = 0
+        # self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, x, mask: bool = False):
+        """
+        Args:
+            x: Input tensor
+            mask (bool: default = False): Apply mask
+        Returns: output tensor
+        """
+        # Get self attention score
+        wei = self.wei(x, mask) # B, T, T
+        v = self.value(x)   # B, T, hs
+
+        out = wei @ v # (B, T, T) @ (B, T, hs) -> (B, T, hs)
+        return out
+
+
 class SelfAttentionHead(nn.Module):
     """ One head of Self-Attention:
         Returns: output for one attention head"""
@@ -92,7 +163,7 @@ class SelfAttentionHead(nn.Module):
         # wei = self.dropout(wei)
 
         # Apply softmax
-        wei = F.softmax(wei) # (B, T, T)
+        wei = F.softmax(wei) # (B, T, T) # attention weights
 
         out = wei @ v # (B, T, T) @ (B, T, hs) -> (B, T, hs)
         return out
