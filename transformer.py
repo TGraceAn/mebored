@@ -48,7 +48,7 @@ class AttentionBlockOnly(nn.Module):
     def __init__(self, config: ModelConfig, head_size: int):
         """
         Args: 
-            config (ZipformerModelConfig): hyper params
+            config (ModelConfig): hyper params
             head_size (int): head_size dim
         """
         super().__init__()
