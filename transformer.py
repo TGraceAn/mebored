@@ -84,7 +84,7 @@ class AttentionBlockOnly(nn.Module):
 #Different option, can use to optimize later
 class SAHead(nn.Module):
     """ One head of Self-Attention:
-        Returns: output for one attention head"""
+        Returns: output for attention score for one head"""
 
     def __init__(self, config: ModelConfig, head_size: int):
         """
@@ -117,7 +117,7 @@ class SAHead(nn.Module):
 
 class SelfAttentionHead(nn.Module):
     """ One head of Self-Attention:
-        Returns: output for one attention head"""
+        Returns: output for attention score for one head"""
 
     def __init__(self, config: ModelConfig, head_size: int):
         """
