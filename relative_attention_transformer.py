@@ -7,6 +7,8 @@ from transformer import ModelConfig
 But just the attention head and multihead attention block for now
 Since I don't really remember the whole paper"""
 
+# This doesn't have the option to clip the relative position yet
+
 class RelativeAttentionHead(nn.Module):
     """
     One head of Self-Attention with relative positional encoding
