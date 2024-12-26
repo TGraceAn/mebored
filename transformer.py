@@ -66,7 +66,7 @@ class AttentionBlockOnly(nn.Module):
         Args:
             x: Input tensor
             mask (bool: default = False): Apply mask
-        Returns: output tensor
+        Returns: attention weight (B, T, T)
         """
         B, T, C = x.shape # B: batch_size, T: sequence_length, C: channels (n_embd)
         
