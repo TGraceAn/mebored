@@ -4,13 +4,76 @@ from torch.nn import functional as F
 from dataclasses import dataclass
 from typing import Optional
 from abc import ABC, abstractmethod
-from transformer import SelfAttentionHead, MultiheadSelfAttention, ModelConfig, FeedForward, Block
+from transformer import MultiheadSelfAttention, ModelConfig, FeedForward, Block, AttentionBlockOnly
 
 """Yeah, idk...."""
 
 @dataclass
 class ZipformerModelConfig(ModelConfig):
     ...
+
+
+class MultiHeadAttentionWeight(nn.Module):
+    """
+    Calculate attention weight for multiple heads.
+    """
+    
+    def __init__(self, config: ModelConfig):
+        """
+        Args:
+            config (ModelConfig): the hyperparameters of the model
+        """
+        super().__init__()
+        hs = config.n_embd // config.n_head
+        self.heads = nn.ModuleList([AttentionBlockOnly(config, hs) for _ in range(config.n_head)])
+
+    def forward(self, x, mask: bool = False):
+        """
+        Args:
+            x: Input tensor
+            mask (bool: default = False): Apply mask
+        Returns: output tensor
+        """
+        B, T, C = x.shape # (B, T, C) (C here is n_embed)
+
+        # Feed through multiple heads and concat       
+        if mask:
+            out = torch.cat([h(x, mask=True) for h in self.heads], dim=-1) #(B, T, T*n_heads)
+        else:
+            out = torch.cat([h(x) for h in self.heads], dim=-1) #(B, T, T*n_heads)
+
+        return out
+
+
+class SA(nn.Module):
+    """
+    Calculate self-attention with the Multihead Attention Weight
+    """
+
+    def __init__(self, config: ModelConfig):
+        """
+        Args:
+            config (ModelConfig): the hyperparameters of the model
+        """
+        self.config = config
+        self.hs = config.n_embd // config.n_head
+        self.value = nn.Linear(config.n_embd, config.n_head*self.hs, bias=False) #(B, T, C)
+        self.proj = nn.Linear(config.n_head*self.hs, config.n_embd)
+
+    def forward(self, x, wei):
+        B, T, C = x.shape
+        x = self.value(x) # (B, T, C) or (B, T, hs*num_head)
+        # wei shape (B, T, T*num_head)
+
+        wei = wei.view(B, T, T, self.config.n_head) # (B, T, T, num_head)
+        x = x.view(B, T, self.config.n_head, self.hs) # (B, T, num_head, hs)
+
+        out = torch.einsum('bttn,btnh->bthn', wei, x) # (B, T, T, num_head) efficient matmul (B, T, num_head, hs) -> (B, T, hs, num_head)
+        out = out.reshape(B, T, -1)
+
+        out = self.proj(out)
+
+        return out # (B, T, n_embd)
 
 
 class BiasNormFunction():
@@ -26,6 +89,7 @@ class BiasNorm(nn.Module):
     BiasNorm from the Zipformer paper
     (Use in place of LayerNorm)
     """
+
     def __init__(self):
         ...
 
@@ -35,6 +99,7 @@ class Bypass(nn.Module):
     Bypass from the Zipformer paper
     As what I understand, it uses the input x from the original tensor and y which is after the last layer
     """
+
     def __init__(self):
         ...
 
@@ -43,7 +108,7 @@ class NonLinearAttention(nn.Module):
     """ One head of Non-Linear Attention:
         Returns: output for one non-linear attention head"""
     
-    def __init__(self, config: ZipformerModelConfig, w_a):
+    def __init__(self, config: ZipformerModelConfig):
         """
         Args:
             config (ZipformerModelConfig): the hyperparameters of the model
@@ -53,28 +118,22 @@ class NonLinearAttention(nn.Module):
         self.config = config
 
         #TODO: write the rest here
-        self.linear_scale = int((3/4)*config.n_embd)
+        self.linear_scale = 3 * config.n_embd // 4
 
         self.linear_1 = nn.Linear(config.n_embd, self.linear_scale)
         self.linear_2 = nn.Linear(config.n_embd, self.linear_scale)
         self.linear_3 = nn.Linear(config.n_embd, self.linear_scale)
 
-        self.w_a = w_a #some attention weights
-
         self.last_linear = nn.Linear(self.linear_scale, config.n_embd)
 
-    def forward(self, x):
+    def forward(self, x, w_a):
         # x.shape is (B, T, C)
-        x_1, x_2, x_3 = self.linear_1(x), self.linear_2(x), self.linear_3(x) #each is (B, T, (3/4)*C)
-        x_1 = nn.Tanh(x_1) # check if this correct
-        x_12 = x_1 * x_2 # pair-wise multiplication
-        x_12 = torch.matmul(x_12, self.w_a)
-
-        #TODO: write the rest here
-        ...
-
-        out = self.last_linear(...)
-
+        x_1, wei, x_3 = self.linear_1(x), self.linear_2(x), self.linear_3(x) #each is (B, T, (3/4)*C)
+        x_1 = nn.Tanh(x_1) # check if this correct (B, T, (3/4)*C)
+        x_12 = x_1 * wei 
+        x_12 = x_12 @ w_a # (B, T, 3/4*C) @ (B, (3/4)*C, (3/4)*C???) -> (B, T, (3/4)*C)
+        out = x_12 * x_3 # pair-wise multiplication #(B, T, (3/4)*C)
+        out = self.last_linear(out) # (B, T, C)
         return out
 
 
@@ -93,35 +152,31 @@ class ZipformerBlock(Block):
         # Model blocks
         #TODO: write the rest here
 
-        self.mha = MultiheadSelfAttention(...)
+        self.mha = MultiHeadAttentionWeight(config)
         self.ffw_1 = FeedForward(...)
-        self.nla = NonLinearAttention(ZipformerModelConfig, self.mha.weight)
-        self.sa_1 = SelfAttentionHead(...)
+        self.nla = NonLinearAttention(config)
+        self.sa_1 = SA(config)
         self.conv_1 = ...
         self.ffw_2 = FeedForward(...)
         self.bypass_1 = ...
-        self.sa_2 = SelfAttentionHead(...)
+        self.sa_2 = SA(config)
         self.conv_2 = ...
         self.ffw_3 = FeedForward(...)
         self.bias_norm = ... # Could be layer norm?
         self.bypass_2 = ...
 
-        # Weight sharing scheme from mha to the rest
-        self.sa_1.weight = self.mha.weight
-        self.sa_2.weight = self.mha.weight
-
     def forward(self, x):
         #TODO: write the rest here: Figure out the bypass and the biasnorm for coding 
 
-        x_1, x_2 = self.ffw_1(x), self.mha(x)
+        x_1, wei = self.ffw_1(x), self.mha(x, mask=False) #Change for tasks
         #After 1st block
         x_1 = x + x_1       # Residual connection
         x_11 = x_1          # Residual     
-        x_1 = self.nla(x, x_2)      
+        x_1 = self.nla(x, wei)      
         #After 2nd block
         x_1 = x_1 + x_11    # Residual connection
         x_11 = x_1          # Residual   
-        x_1 = self.sa_1(x_1)    # x_2 do smth here
+        x_1 = self.sa_1(x_1, wei)
         #After 3rd block
         x_1 = x_1 + x_11    # Residual connection
         x_11 = x_1          # Residual
@@ -135,11 +190,11 @@ class ZipformerBlock(Block):
         x_1 = self.bypass_1(x_1)    # x do smth here
         #After 6th block
         x_11 = x_1          # Residual
-        x_1 = self.sa_2(x_1)    # x_2 do smth here
+        x_1 = self.sa_2(x_1, wei)
         #After 7th block
         x_1 = x_1 + x_11    # Residual connection
         x_11 = x_1          # Residual
-        x_1 = self.conv_2(x_2)
+        x_1 = self.conv_2(x_1)
         #After 8th block
         x_1 = x_1 + x_11    # Residual connection
         x_11 = x_1          # Residual
@@ -153,5 +208,4 @@ class ZipformerBlock(Block):
         return out
         
 #TODO: Check the code logic for the nla, after that can continute with the bypass and biasnorm part
-
 
