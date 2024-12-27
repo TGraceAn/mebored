@@ -142,7 +142,7 @@ class NonLinearAttention(nn.Module):
         out = out.reshape(B, T, -1) # (B, T, 3/4*hs*num_head)
         out = x_A * out 
         out = self.last_linear(out) # (B, T, C)
-        
+
         return out
 
 
@@ -162,16 +162,16 @@ class ZipformerBlock(Block):
         #TODO: write the rest here
 
         self.mha = MultiHeadAttentionWeight(config)
-        self.ffw_1 = FeedForward(...)
+        self.ffw_1 = FeedForward(config)
         self.nla = NonLinearAttention(config)
         self.sa_1 = SA(config)
         self.conv_1 = ...
-        self.ffw_2 = FeedForward(...)
+        self.ffw_2 = FeedForward(config)
         self.bypass_1 = ...
         self.sa_2 = SA(config)
         self.conv_2 = ...
-        self.ffw_3 = FeedForward(...)
-        self.bias_norm = ... # Could be layer norm?
+        self.ffw_3 = FeedForward(config)
+        self.bias_norm = ...
         self.bypass_2 = ...
 
     def forward(self, x):
