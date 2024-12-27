@@ -70,7 +70,6 @@ class SA(nn.Module):
 
         out = torch.einsum('bttn,btnh->bthn', wei, x) # (B, T, T, num_head) efficient matmul (B, T, num_head, hs) -> (B, T, hs, num_head)
         out = out.reshape(B, T, -1)
-
         out = self.proj(out)
 
         return out # (B, T, n_embd)
@@ -124,16 +123,26 @@ class NonLinearAttention(nn.Module):
         self.linear_2 = nn.Linear(config.n_embd, self.linear_scale)
         self.linear_3 = nn.Linear(config.n_embd, self.linear_scale)
 
+        self.tanh = nn.Tanh()
+
         self.last_linear = nn.Linear(self.linear_scale, config.n_embd)
 
-    def forward(self, x, w_a):
+    def forward(self, x, wei):
         # x.shape is (B, T, C)
-        x_1, wei, x_3 = self.linear_1(x), self.linear_2(x), self.linear_3(x) #each is (B, T, (3/4)*C)
-        x_1 = nn.Tanh(x_1) # check if this correct (B, T, (3/4)*C)
-        x_12 = x_1 * wei 
-        x_12 = x_12 @ w_a # (B, T, 3/4*C) @ (B, (3/4)*C, (3/4)*C???) -> (B, T, (3/4)*C)
-        out = x_12 * x_3 # pair-wise multiplication #(B, T, (3/4)*C)
+        B, T, C = x.shape
+
+        x_A, x_B, x_C = self.linear_1(x), self.linear_2(x), self.linear_3(x) #each is (B, T, (3/4)*C) or (B, T, hs*num_head*3/4)
+        x_B = self.tanh(x_B) # check if this correct (B, T, (3/4)*C) or (B, T, hs*3/4*num_head)
+        x_BC = x_B * x_C # use as value
+
+        # wei shape (B, T, T*num_head)
+        wei = wei.view(B, T, T, self.config.n_head) # (B, T, T, num_head)
+        x_BC = x_BC.view(B, T, self.config.n_head, self.linear_scale) # (B, T, num_head, hs*3/4)
+        out = torch.einsum('bttn,btnh->bthn', wei, x_BC) # (B, T, T, num_head) efficient matmul (B, T, num_head, hs*3/4) -> (B, T, 3/4*hs, num_head)
+        out = out.reshape(B, T, -1) # (B, T, 3/4*hs*num_head)
+        out = x_A * out 
         out = self.last_linear(out) # (B, T, C)
+        
         return out
 
 
